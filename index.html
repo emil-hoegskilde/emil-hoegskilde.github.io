@@ -1,7 +1,117 @@
 <!DOCTYPE html>
-<html>
-<body>
-<h1>Hello World</h1>
-<p>I'm hosted with GitHub Pages.</p>
-</body>
+<html lang="">
+    <head>
+        <meta charset="utf-8">
+        <title>Super cool extension</title>
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+    </head>
+    <body>
+        <div style="flex-direction: column">
+            <h1>Super cool extension</h1>
+<!--            <iframe id="3dViewer" width="800px" height="800px" src="https://student.dalux.dk/daluxbuild/trunkdev/public/client/327208/embedded-viewer/default"></iframe>-->
+<!--            <iframe id="3dViewer" width="800px" height="800px" src="https://2022.dalux.dk/daluxbuild/trunkdev/public/client/327208/embedded-viewer/default"></iframe>-->
+<!--            <iframe id="3dViewer" width="800px" height="800px" src="http://localhost:4200/327208/embedded-viewer/hi"></iframe>-->
+            <iframe id="3dViewer" width="800px" height="800px" src="https://2022.dalux.dk/daluxbuild/peek/public/client/106/embedded-viewer/default"></iframe>
+            <div id="getElements" style="width: 100%; visibility: hidden">
+                <button onclick="getCurrentBuildingElements()">Get searchable element properties</button>
+                <button onclick="getBuildingElementSearchableProperties()">Get building elements</button>
+            </div>
+            <div id="setColors" style="width: 100%; visibility: hidden">
+                <button onclick="setColors()">Color model</button>
+            </div>
+        </div>
+
+
+        <script>
+            // postMessage docs https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage
+            // const targetIframeOrigin = 'https://student.dalux.dk'
+            const targetIframeOrigin = 'https://2022.dalux.dk'
+            // const targetIframeOrigin = 'http://localhost:4200'
+            // const targetIframeOrigin = 'http://localhost:4200'
+            const bimViewer = document.getElementById('3dViewer')
+            let isInitCompleted = false
+            let currentBuildingBaseID
+            let elements
+
+            const getBuildingIds = () =>  {
+                bimViewer.contentWindow.postMessage(new MessagePostRequest(Date.now(), 'GetBuildingBaseIDs', null),targetIframeOrigin)
+            }
+            const setBuildingID = (buildingBaseID) => {
+                currentBuildingBaseID = buildingBaseID
+                bimViewer.contentWindow.postMessage(new MessagePostRequest(Date.now(), 'SetBuildingBaseID', {buildingBaseID: buildingBaseID}) , targetIframeOrigin)
+            }
+            const getBuildingElements = (buildingBaseID, buildingElementProps) => {
+                bimViewer.contentWindow.postMessage(new MessagePostRequest(Date.now(),'GetBuildingElements', {buildingBaseID: buildingBaseID, buildingElementProps: buildingElementProps}), targetIframeOrigin)
+            }
+            const getCurrentBuildingElements = () => {
+                getBuildingElements(currentBuildingBaseID, ['Volume'])
+            }
+            const getBuildingElementSearchableProperties = () => {
+                bimViewer.contentWindow.postMessage(new MessagePostRequest(Date.now(),'GetBuildingElementsSearchableProperties', {buildingBaseID: currentBuildingBaseID}), targetIframeOrigin)
+            }
+            const setColors = () => {
+                const uniqueIdsToColors = []
+                var centerxValues = []
+                for (let j = 0; j < elements.length; j++) {
+                    centerxValues.push(Math.abs(elements[j].centerX))
+                }
+                var maxNum = Math.max.apply(null, centerxValues);
+                var minNum = Math.min.apply(null, centerxValues);
+                for (let j = 0; j < elements.length; j++) {
+                    uniqueIdsToColors.push({uniqueID: elements[j].uniqueID, color: redToBlackHeatmap(minNum,maxNum,Math.abs(elements[j].centerX))})
+                }
+                bimViewer.contentWindow.postMessage(new MessagePostRequest(Date.now(),'UpdateElementColors', {uniqueIDsToColors: uniqueIdsToColors}), targetIframeOrigin)
+            }
+
+            const redToBlackHeatmap = (minimum, maximum, value) => {
+                var r = 255-Math.round(255*((value +0.0 -minimum) / (maximum - minimum)))
+                return {red: r, green: 0, blue: 0}
+            }
+
+            const setInitCompleted = () => {
+                document.getElementById('getElements').style.visibility = "visible"
+                isInitCompleted = true
+            }
+
+            window.onmessage = (event) => {
+                if (event.origin === targetIframeOrigin) {
+                    const response = new MessagePostResponse(event.data.requestID, event.data.command, event.data.result)
+                    if(response.command === 'EmbeddedViewerInit') {
+                        getBuildingIds()
+                        return
+                    }
+                    if(response.command === 'GetBuildingBaseIDs') {
+                        setBuildingID(response.result.data.buildingBaseIDs[0])
+                        if(!isInitCompleted) {
+                            setInitCompleted()
+                        }
+                    }
+                    if(response.command === 'GetBuildingElementsSearchableProperties') {
+                        console.log(response.result.data)
+                    }
+                    if(response.command === 'GetBuildingElements') {
+                        document.getElementById('setColors').style.visibility = "visible"
+                        console.log(response.result.data)
+                        elements = response.result.data.buildingElements
+                    }
+                }
+            }
+
+            class MessagePostRequest {
+                constructor(requestID, command, requestParams) {
+                    this.requestID = requestID;
+                    this.command = command;
+                    this.requestParams = requestParams;
+                }
+            }
+            class MessagePostResponse {
+                constructor(requestID, command, result) {
+                    this.requestID = requestID;
+                    this.command = command;
+                    this.result = result;
+                }
+            }
+        </script>
+    </body>
 </html>
